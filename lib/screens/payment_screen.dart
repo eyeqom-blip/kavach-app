@@ -17,6 +17,7 @@ class PaymentScreen extends StatefulWidget {
 
 class _PaymentScreenState extends State<PaymentScreen> {
   int _members = 5;
+  int _proGuardCount = 0; // Person-wise Call Log / Kids Guard
   String _planType = '6_MONTHS';
   final _utrCtrl = TextEditingController();
   String? _screenshotBase64;
@@ -24,8 +25,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
   bool _submitting = false;
 
   int get _extra => _members > 5 ? _members - 5 : 0;
-  int get _price1M => 20 + (_extra * 5);
-  int get _price6M => 80 + (_extra * 20);
+  int get _price1M => 20 + (_extra * 5) + (_proGuardCount * 10);
+  int get _price6M => 80 + (_extra * 20) + (_proGuardCount * 35);
   int get _baseAmount => _planType == '6_MONTHS' ? _price6M : _price1M;
   int get _appliedDiscount => widget.discountCredits > _baseAmount ? _baseAmount : widget.discountCredits;
   int get _finalPayable => _baseAmount - _appliedDiscount;
@@ -33,12 +34,12 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _openUpiApp() async {
     final upiId = widget.config['upi_id'] ?? 'aapka_upi@okaxis';
     final upiName = Uri.encodeComponent(widget.config['upi_name'] ?? 'Family Kavach');
-    final note = Uri.encodeComponent('Kavach $_planType $_members Members');
+    final note = Uri.encodeComponent('Kavach $_planType ${_members}M ${_proGuardCount}Pro');
     final uri = Uri.parse('upi://pay?pa=$upiId&pn=$upiName&am=$_finalPayable&cu=INR&tn=$note');
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('UPI App nahi khula. Direct is ID par ₹$_finalPayable bhejein: $upiId')),
+          SnackBar(content: Text('UPI App nahi khula. Direct ₹$_finalPayable bhejein: $upiId')),
         );
       }
     }
@@ -59,7 +60,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
   Future<void> _submitPayment() async {
     if (_finalPayable > 0 && _utrCtrl.text.trim().length < 6 && _screenshotBase64 == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please UTR/Transaction ID daalein ya Screenshot upload karein')),
+        const SnackBar(content: Text('Please UTR ID daalein ya Screenshot upload karein')),
       );
       return;
     }
@@ -74,6 +75,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           'userId': prefs.getInt('user_id'),
           'planType': _planType,
           'requestedMembers': _members,
+          'proGuardCount': _proGuardCount,
           'utrNumber': _finalPayable == 0
               ? 'FREE_BY_REFERRAL_CREDITS'
               : (_utrCtrl.text.trim().isEmpty ? 'SCREENSHOT_UPLOADED' : _utrCtrl.text.trim()),
@@ -86,15 +88,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Request Sent! ✅'),
-            content: Text('₹$_finalPayable (Discount: ₹$_appliedDiscount) ki request Admin ko bhej di gayi hai!'),
+            content: Text('₹$_finalPayable ($_members Members + $_proGuardCount Pro Guard) ki request Admin ko bhej di gayi hai!'),
             actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(ctx);
-                  Navigator.pop(context);
-                },
-                child: const Text('OK'),
-              ),
+              ElevatedButton(onPressed: () { Navigator.pop(ctx); Navigator.pop(context); }, child: const Text('OK')),
             ],
           ),
         );
@@ -112,28 +108,32 @@ class _PaymentScreenState extends State<PaymentScreen> {
     final upiId = widget.config['upi_id'] ?? 'aapka_upi@okaxis';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Kavach Suraksha Plan')),
+      appBar: AppBar(title: const Text('Kavach Plan & Add-Ons')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Family Members Kitne Hain?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Text('Default 5 (User + 4) = ₹20/mo | Extra person +₹5/mo', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
-                  const SizedBox(height: 12),
+                  const Text('1. Total Family Members (5 to 20)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('5 Default = ₹20/mo | Extra Member = +₹5/mo', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      IconButton.filledTonal(onPressed: _members > 5 ? () => setState(() => _members--) : null, icon: const Icon(Icons.remove)),
+                      IconButton.filledTonal(
+                        onPressed: _members > 5 ? () => setState(() {
+                          _members--;
+                          if (_proGuardCount > _members) _proGuardCount = _members;
+                        }) : null,
+                        icon: const Icon(Icons.remove),
+                      ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text('$_members Persons', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.primary)),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text('$_members Persons', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: cs.primary)),
                       ),
                       IconButton.filledTonal(onPressed: _members < 20 ? () => setState(() => _members++) : null, icon: const Icon(Icons.add)),
                     ],
@@ -142,17 +142,43 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('2. Person-Wise Pro / Kids Guard (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text('Call Summary + Hidden Apps + Anti-Theft sirf selected members par (+₹10/mo ya +₹35/6mo per person)',
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton.filledTonal(onPressed: _proGuardCount > 0 ? () => setState(() => _proGuardCount--) : null, icon: const Icon(Icons.remove)),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text('$_proGuardCount Selected', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber)),
+                      ),
+                      IconButton.filledTonal(onPressed: _proGuardCount < _members ? () => setState(() => _proGuardCount++) : null, icon: const Icon(Icons.add)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _planTile('1_MONTH', '1 Month Plan', '₹$_price1M', '₹20 base + ₹5/extra')),
+              Expanded(child: _planTile('1_MONTH', '1 Month', '₹$_price1M', 'Monthly')),
               const SizedBox(width: 10),
-              Expanded(child: _planTile('6_MONTHS', '6 Months Saver', '₹$_price6M', 'Best Value!')),
+              Expanded(child: _planTile('6_MONTHS', '6 Months Saver', '₹$_price6M', '33% Off!')),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
               color: Colors.green.withOpacity(0.15),
@@ -160,8 +186,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ),
             child: Column(
               children: [
-                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Plan Price:'), Text('₹$_baseAmount')]),
-                const SizedBox(height: 4),
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Plan Total:'), Text('₹$_baseAmount')]),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -180,56 +205,41 @@ class _PaymentScreenState extends State<PaymentScreen> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           if (_finalPayable > 0) ...[
             Card(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               child: Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Step 1: Pay ₹$_finalPayable via UPI (0% Fee)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                    const SizedBox(height: 6),
                     SelectableText('UPI ID: $upiId', style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     SizedBox(
                       width: double.infinity,
-                      height: 48,
+                      height: 46,
                       child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: Colors.black),
                         onPressed: _openUpiApp,
                         icon: const Icon(Icons.account_balance_wallet_rounded),
-                        label: Text('Pay ₹$_finalPayable via GPay / PhonePe', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        label: Text('Pay ₹$_finalPayable via UPI App', style: const TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Card(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Step 2: Payment Verify Karein', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     const SizedBox(height: 10),
                     TextField(controller: _utrCtrl, decoration: const InputDecoration(labelText: '12-Digit UTR / Transaction ID', border: OutlineInputBorder())),
-                    const SizedBox(height: 10),
+                    const SizedBox(height: 8),
                     OutlinedButton.icon(
                       onPressed: _pickScreenshot,
                       icon: const Icon(Icons.upload_file_rounded),
-                      label: Text(_screenshotName ?? 'Upload Payment Screenshot (Optional)'),
+                      label: Text(_screenshotName ?? 'Upload Payment Screenshot'),
                     ),
                   ],
                 ),
               ),
             ),
           ],
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -238,10 +248,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               onPressed: _submitting ? null : _submitPayment,
               child: _submitting
                   ? const CircularProgressIndicator(color: Colors.black)
-                  : Text(
-                      _finalPayable == 0 ? 'Activate FREE with Referral Credits 🎉' : 'Submit Payment For Approval →',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                    ),
+                  : Text(_finalPayable == 0 ? 'Activate FREE with Credits 🎉' : 'Submit For Approval →', style: const TextStyle(fontWeight: FontWeight.bold)),
             ),
           ),
         ],
@@ -264,10 +271,9 @@ class _PaymentScreenState extends State<PaymentScreen> {
         child: Column(
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 6),
-            Text(price, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.primary)),
             const SizedBox(height: 4),
-            Text(sub, style: const TextStyle(fontSize: 11, color: Colors.grey), textAlign: TextAlign.center),
+            Text(price, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: cs.primary)),
+            Text(sub, style: const TextStyle(fontSize: 11, color: Colors.grey)),
           ],
         ),
       ),

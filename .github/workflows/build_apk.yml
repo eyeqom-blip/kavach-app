@@ -28,19 +28,134 @@ jobs:
           cp /tmp/pubspec.yaml pubspec.yaml
           rm -rf lib && cp -r /tmp/lib lib
 
-      - name: Inject Native SOS Audio Recorder, Lint Fix & Permissions
+      - name: Decode Permanent Release Keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > android/app/kavach-release.jks
+          keytool -list -keystore android/app/kavach-release.jks -storepass kavach2026
+
+      - name: Inject Native Kotlin Anti-Theft, Parental, Signing & Permissions
         run: |
           VER="1.0.${{ github.run_number }}"
           sed -i "s|const String APP_VERSION = '.*';|const String APP_VERSION = '${VER}';|" lib/main.dart
+
           mkdir -p android/app/src/main/kotlin/com/familykavach/family_kavach
-          cat << 'KOTLIN' > android/app/src/main/kotlin/com/familykavach/family_kavach/MainActivity.kt
+          mkdir -p android/app/src/main/res/xml
+          mkdir -p android/app/src/main/res/values
+
+          cat << 'XML1' > android/app/src/main/res/xml/device_admin_receiver.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-policies>
+                  <force-lock />
+                  <watch-login />
+              </uses-policies>
+          </device-admin>
+          XML1
+
+          cat << 'XML2' > android/app/src/main/res/values/kavach_strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="kavach_acc_desc">Family Kavach Anti-Theft Power Guard protects locked phone from unauthorized shutdown.</string>
+          </resources>
+          XML2
+
+          cat << 'XML3' > android/app/src/main/res/xml/accessibility_service_config.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+              android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+              android:accessibilityFeedbackType="feedbackGeneric"
+              android:accessibilityFlags="flagDefault"
+              android:canRetrieveWindowContent="true"
+              android:description="@string/kavach_acc_desc"
+              android:notificationTimeout="100" />
+          XML3
+
+          cat << 'KT1' > android/app/src/main/kotlin/com/familykavach/family_kavach/KavachAdminReceiver.kt
           package com.familykavach.family_kavach
 
+          import android.app.admin.DeviceAdminReceiver
+          import android.content.Context
+          import android.content.Intent
+
+          class KavachAdminReceiver : DeviceAdminReceiver() {
+              override fun onPasswordFailed(context: Context, intent: Intent) {
+                  super.onPasswordFailed(context, intent)
+                  val prefs = context.getSharedPreferences("kavach_security", Context.MODE_PRIVATE)
+                  val count = prefs.getInt("wrong_pin_count", 0) + 1
+                  prefs.edit()
+                      .putInt("wrong_pin_count", count)
+                      .putLong("last_wrong_pin_time", System.currentTimeMillis())
+                      .apply()
+              }
+          }
+          KT1
+
+          cat << 'KT2' > android/app/src/main/kotlin/com/familykavach/family_kavach/KavachAccessibilityService.kt
+          package com.familykavach.family_kavach
+
+          import android.accessibilityservice.AccessibilityService
+          import android.app.KeyguardManager
+          import android.content.Context
+          import android.view.accessibility.AccessibilityEvent
+          import android.view.accessibility.AccessibilityNodeInfo
+
+          class KavachAccessibilityService : AccessibilityService() {
+              override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+                  if (event == null) return
+                  val prefs = getSharedPreferences("kavach_security", Context.MODE_PRIVATE)
+                  if (!prefs.getBoolean("power_guard_enabled", false)) return
+
+                  val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                  if (!km.isKeyguardLocked) return
+
+                  val pkg = event.packageName?.toString() ?: ""
+                  if (pkg == "com.android.systemui" || pkg == "android" || pkg.contains("power") || pkg.contains("miui")) {
+                      val root = rootInActiveWindow ?: return
+                      if (containsPowerText(root)) {
+                          prefs.edit().putLong("last_power_tamper_time", System.currentTimeMillis()).apply()
+                          performGlobalAction(GLOBAL_ACTION_BACK)
+                          performGlobalAction(GLOBAL_ACTION_HOME)
+                      }
+                  }
+              }
+
+              private fun containsPowerText(node: AccessibilityNodeInfo?): Boolean {
+                  if (node == null) return false
+                  val txt = (node.text?.toString() ?: "") + " " + (node.contentDescription?.toString() ?: "")
+                  val lower = txt.lowercase()
+                  if (lower.contains("power off") || lower.contains("shut down") || lower.contains("restart") || lower.contains("reboot")) {
+                      return true
+                  }
+                  for (i in 0 until node.childCount) {
+                      if (containsPowerText(node.getChild(i))) return true
+                  }
+                  return false
+              }
+
+              override fun onInterrupt() {}
+          }
+          KT2
+
+          cat << 'KT3' > android/app/src/main/kotlin/com/familykavach/family_kavach/MainActivity.kt
+          package com.familykavach.family_kavach
+
+          import android.app.admin.DevicePolicyManager
+          import android.app.usage.UsageStatsManager
+          import android.content.ComponentName
+          import android.content.Context
+          import android.content.Intent
+          import android.content.pm.ApplicationInfo
           import android.media.MediaRecorder
           import android.os.Build
+          import android.provider.CallLog
+          import android.provider.Settings
           import io.flutter.embedding.android.FlutterActivity
           import io.flutter.embedding.engine.FlutterEngine
           import io.flutter.plugin.common.MethodChannel
+          import org.json.JSONArray
+          import org.json.JSONObject
           import java.io.File
 
           class MainActivity: FlutterActivity() {
@@ -49,6 +164,7 @@ jobs:
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
+
                   MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.familykavach/sos_audio")
                       .setMethodCallHandler { call, result ->
                           when (call.method) {
@@ -56,12 +172,7 @@ jobs:
                                   try {
                                       val file = File(cacheDir, "kavach_sos_${System.currentTimeMillis()}.m4a")
                                       currentPath = file.absolutePath
-                                      recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                          MediaRecorder(this)
-                                      } else {
-                                          @Suppress("DEPRECATION")
-                                          MediaRecorder()
-                                      }
+                                      recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
                                       recorder?.apply {
                                           setAudioSource(MediaRecorder.AudioSource.MIC)
                                           setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
@@ -77,26 +188,121 @@ jobs:
                               }
                               "stopRecording" -> {
                                   try {
-                                      recorder?.stop()
-                                      recorder?.release()
-                                      recorder = null
+                                      recorder?.stop(); recorder?.release(); recorder = null
                                       result.success(currentPath)
                                   } catch (e: Exception) {
-                                      recorder?.release()
-                                      recorder = null
+                                      recorder?.release(); recorder = null
                                       result.success(currentPath)
                                   }
                               }
                               else -> result.notImplemented()
                           }
                       }
+
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.familykavach/kavach_guard")
+                      .setMethodCallHandler { call, result ->
+                          when (call.method) {
+                              "getInstalledApps" -> {
+                                  val pm = packageManager
+                                  val apps = pm.getInstalledApplications(0)
+                                  val hidden = JSONArray()
+                                  val social = JSONArray()
+                                  val socialPkgs = listOf("instagram", "snapchat", "whatsapp", "youtube", "facebook", "telegram", "pubg", "freefire")
+                                  for (app in apps) {
+                                      if ((app.flags and ApplicationInfo.FLAG_SYSTEM) == 0) {
+                                          val pkg = app.packageName
+                                          val name = pm.getApplicationLabel(app).toString()
+                                          val obj = JSONObject().put("name", name).put("pkg", pkg)
+                                          if (pm.getLaunchIntentForPackage(pkg) == null) hidden.put(obj)
+                                          if (socialPkgs.any { pkg.lowercase().contains(it) }) social.put(obj)
+                                      }
+                                  }
+                                  result.success(JSONObject().put("hidden", hidden).put("social", social).toString())
+                              }
+                              "getScreenTime" -> {
+                                  val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+                                  val now = System.currentTimeMillis()
+                                  val start = now - 86400000L
+                                  val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, start, now)
+                                  val arr = JSONArray()
+                                  stats?.filter { it.totalTimeInForeground > 60000 }
+                                      ?.sortedByDescending { it.totalTimeInForeground }
+                                      ?.take(10)
+                                      ?.forEach {
+                                          arr.put(JSONObject().put("pkg", it.packageName).put("minutes", it.totalTimeInForeground / 60000))
+                                      }
+                                  result.success(arr.toString())
+                              }
+                              "getCallSummary" -> {
+                                  val arr = JSONArray()
+                                  try {
+                                      val cursor = contentResolver.query(
+                                          CallLog.Calls.CONTENT_URI,
+                                          arrayOf(CallLog.Calls.NUMBER, CallLog.Calls.TYPE, CallLog.Calls.DURATION),
+                                          null, null, "${CallLog.Calls.DATE} DESC"
+                                      )
+                                      cursor?.use {
+                                          var count = 0
+                                          while (it.moveToNext() && count < 15) {
+                                              val num = it.getString(0) ?: "Unknown"
+                                              val typeCode = it.getInt(1)
+                                              val typeStr = when (typeCode) {
+                                                  CallLog.Calls.INCOMING_TYPE -> "IN"
+                                                  CallLog.Calls.OUTGOING_TYPE -> "OUT"
+                                                  else -> "MISSED"
+                                              }
+                                              val dur = it.getString(2) ?: "0"
+                                              arr.put(JSONObject().put("number", num).put("type", typeStr).put("duration", dur))
+                                              count++
+                                          }
+                                      }
+                                  } catch (_: SecurityException) {}
+                                  result.success(arr.toString())
+                              }
+                              "enableDeviceAdmin" -> {
+                                  val comp = ComponentName(this, KavachAdminReceiver::class.java)
+                                  val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                      putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, comp)
+                                      putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, "Family Kavach Anti-Theft & Uninstall Guard")
+                                  }
+                                  startActivity(intent)
+                                  result.success(true)
+                              }
+                              "openAccessibilitySettings" -> {
+                                  startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                  result.success(true)
+                              }
+                              "openUsageSettings" -> {
+                                  startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                  result.success(true)
+                              }
+                              "setPowerGuard" -> {
+                                  val enabled = call.argument<Boolean>("enabled") ?: false
+                                  getSharedPreferences("kavach_security", Context.MODE_PRIVATE)
+                                      .edit().putBoolean("power_guard_enabled", enabled).apply()
+                                  result.success(true)
+                              }
+                              "getTamperStatus" -> {
+                                  val p = getSharedPreferences("kavach_security", Context.MODE_PRIVATE)
+                                  result.success(mapOf(
+                                      "powerGuardEnabled" to p.getBoolean("power_guard_enabled", false),
+                                      "wrongPinCount" to p.getInt("wrong_pin_count", 0)
+                                  ))
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
               }
           }
-          KOTLIN
+          KT3
+
           python3 -c '
           import os
           path = "android/app/src/main/AndroidManifest.xml"
           with open(path, "r") as f: data = f.read()
+          if "xmlns:tools" not in data:
+              data = data.replace("xmlns:android=\"http://schemas.android.com/apk/res/android\"",
+                  "xmlns:android=\"http://schemas.android.com/apk/res/android\"\n    xmlns:tools=\"http://schemas.android.com/tools\"", 1)
           perms = """    <uses-permission android:name="android.permission.INTERNET"/>
               <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
               <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
@@ -106,37 +312,61 @@ jobs:
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
               <uses-permission android:name="android.permission.WAKE_LOCK"/>
               <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS"/>
+              <uses-permission android:name="android.permission.READ_CALL_LOG"/>
+              <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+              <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions"/>
               <queries>
-                  <intent>
-                      <action android:name="android.intent.action.VIEW" />
-                      <data android:scheme="upi" />
-                  </intent>
-                  <intent>
-                      <action android:name="android.intent.action.VIEW" />
-                      <data android:scheme="https" />
-                  </intent>
+                  <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="upi" /></intent>
+                  <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="https" /></intent>
               </queries>
           """
           if "ACCESS_FINE_LOCATION" not in data:
               data = data.replace("<application", perms + "\n    <application", 1)
+
+          receivers = """        <receiver
+                      android:name=".KavachAdminReceiver"
+                      android:permission="android.permission.BIND_DEVICE_ADMIN"
+                      android:exported="true">
+                      <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin_receiver" />
+                      <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+                  </receiver>
+                  <service
+                      android:name=".KavachAccessibilityService"
+                      android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+                      android:exported="true">
+                      <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+                      <meta-data android:name="android.accessibilityservice" android:resource="@xml/accessibility_service_config" />
+                  </service>
+          """
+          if "KavachAdminReceiver" not in data:
+              data = data.replace("</application>", receivers + "\n    </application>", 1)
+
           data = data.replace("android:label=\"family_kavach\"", "android:label=\"Family Kavach\"")
           with open(path, "w") as f: f.write(data)
 
           kts = "android/app/build.gradle.kts"
-          groovy = "android/app/build.gradle"
           if os.path.exists(kts):
               with open(kts, "r") as f: g = f.read()
-              if "checkReleaseBuilds" not in g:
-                  g = g.replace("android {", "android {\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }", 1)
-                  with open(kts, "w") as f: f.write(g)
-          elif os.path.exists(groovy):
-              with open(groovy, "r") as f: g = f.read()
-              if "checkReleaseBuilds" not in g:
-                  g = g.replace("android {", "android {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }", 1)
-                  with open(groovy, "w") as f: f.write(g)
+              g = g.replace("minSdk = flutter.minSdkVersion", "minSdk = 23")
+              sign_cfg = """    signingConfigs {
+                  create("release") {
+                      keyAlias = "kavach"
+                      keyPassword = "kavach2026"
+                      storeFile = file("kavach-release.jks")
+                      storePassword = "kavach2026"
+                  }
+              }
+              lint {
+                  checkReleaseBuilds = false
+                  abortOnError = false
+              }
+              buildTypes {"""
+              g = g.replace("    buildTypes {", sign_cfg, 1)
+              g = g.replace("signingConfig = signingConfigs.getByName(\"debug\")", "signingConfig = signingConfigs.getByName(\"release\")")
+              with open(kts, "w") as f: f.write(g)
           '
 
-      - name: Build Split ARM64 APK (Fast & Telegram Ready)
+      - name: Build Permanent-Signed Split ARM64 APK
         run: |
           flutter pub get
           flutter build apk --release --split-per-abi
@@ -154,30 +384,22 @@ jobs:
           OUT_APK="FamilyKavach-${TAG}.apk"
           cp "$APK" "$OUT_APK"
 
-          echo "Sending APK to Telegram FIRST..."
-          curl -s -F chat_id="$ADMIN_CHAT_ID" \
+          echo "Sending APK to Telegram..."
+          curl -sS -F chat_id="$ADMIN_CHAT_ID" \
                -F document=@"$OUT_APK" \
-               -F caption="🛡️ Family Kavach ${TAG} APK Ready! Tap karke test karein." \
+               -F caption="🛡️ Family Kavach ${TAG} (Phase 4 + Permanent Key) Ready!" \
                "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
           echo ""
-
-          if ! gh api repos/eyeqom-blip/kavach-releases/branches/main >/dev/null 2>&1; then
-            echo "# Family Kavach Releases" | base64 -w0 > /tmp/readme_b64
-            gh api -X PUT repos/eyeqom-blip/kavach-releases/contents/README.md \
-              -f message="Init releases repo" \
-              -f content="$(cat /tmp/readme_b64)" || true
-            sleep 2
-          fi
 
           gh release create "$TAG" "$OUT_APK" \
             --repo eyeqom-blip/kavach-releases \
             --title "Family Kavach ${TAG}" \
-            --notes "Phase 3 Build ${TAG}"
+            --notes "Phase 4 Build ${TAG}"
 
           APK_URL="https://github.com/eyeqom-blip/kavach-releases/releases/download/${TAG}/${OUT_APK}"
 
           echo "Triggering 3-option buttons..."
-          curl -s -X POST "https://kavach-backend-8hjz.onrender.com/api/admin/new-build" \
+          curl -sS -X POST "https://kavach-backend-8hjz.onrender.com/api/admin/new-build" \
                -H "Content-Type: application/json" \
-               -d "{\"version\":\"${VER}\",\"apkUrl\":\"${APK_URL}\",\"notes\":\"Phase 3 Build #${{ github.run_number }}\",\"secret\":\"${ADMIN_SECRET}\"}"
+               -d "{\"version\":\"${VER}\",\"apkUrl\":\"${APK_URL}\",\"notes\":\"Phase 4 Build #${{ github.run_number }}\",\"secret\":\"${ADMIN_SECRET}\"}"
           echo ""

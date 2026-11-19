@@ -9,9 +9,11 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'screens/payment_screen.dart';
 import 'screens/map_sos_screen.dart';
+import 'screens/chat_tasks_screen.dart';
+import 'screens/kids_antitheft_screen.dart';
 
 const String BASE_URL = 'https://kavach-backend-8hjz.onrender.com';
-const String APP_VERSION = '1.0.1';
+const String APP_VERSION = '1.0.2';
 
 void main() {
   runApp(const FamilyKavachApp());
@@ -496,13 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _shareAppToFriends();
-            },
-            child: const Text('Share Code'),
-          ),
+          ElevatedButton(onPressed: () { Navigator.pop(ctx); _shareAppToFriends(); }, child: const Text('Share Code')),
         ],
       ),
     );
@@ -562,7 +558,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 leading: CircleAvatar(backgroundColor: Colors.amber.withOpacity(0.2), child: const Icon(Icons.workspace_premium_rounded, color: Colors.amber)),
                 title: Text('Kavach Plan: $_planStatus ($_maxMembers Limit)', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('₹20/mo (5 Members) • Extra ₹5/mo\nReferral Discount Balance: ₹$_discountCredits'),
+                subtitle: Text('₹20/mo (5 Members) • Extra ₹5/mo • Pro ₹10/person\nReferral Credits: ₹$_discountCredits'),
                 trailing: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
                   onPressed: () async {
@@ -585,34 +581,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisSpacing: 12,
               childAspectRatio: 1.2,
               children: [
-                _featureCard(
-                  Icons.my_location_rounded,
-                  'Live GPS Track',
-                  '1-Click Map & Battery',
-                  Colors.cyan,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapSosScreen(baseUrl: BASE_URL))),
-                ),
-                _featureCard(
-                  Icons.sos_rounded,
-                  'Emergency SOS',
-                  'Silent Ring + Audio',
-                  Colors.redAccent,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapSosScreen(baseUrl: BASE_URL, openSosTab: true))),
-                ),
-                _featureCard(
-                  Icons.lock_rounded,
-                  'E2EE Family Chat',
-                  'Phase 4 me judega',
-                  Colors.purpleAccent,
-                  () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phase 4 me E2EE Chat & Tasks judega!'))),
-                ),
-                _featureCard(
-                  Icons.child_care_rounded,
-                  'Kids & Anti-Theft',
-                  'Phase 4 me judega',
-                  Colors.amber,
-                  () => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Phase 4 me Parental Control & Anti-Theft judega!'))),
-                ),
+                _featureCard(Icons.my_location_rounded, 'Live GPS Track', '1-Click Map & Battery', Colors.cyan,
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapSosScreen(baseUrl: BASE_URL)))),
+                _featureCard(Icons.sos_rounded, 'Emergency SOS', 'Silent Ring + Audio', Colors.redAccent,
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapSosScreen(baseUrl: BASE_URL, openSosTab: true)))),
+                _featureCard(Icons.lock_rounded, 'E2EE Chat & Tasks', 'Encrypted + Chatbot', Colors.purpleAccent,
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatTasksScreen(baseUrl: BASE_URL)))),
+                _featureCard(Icons.child_care_rounded, 'Kids & Anti-Theft', 'Person-Wise Guard', Colors.amber,
+                    () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KidsAntiTheftScreen(baseUrl: BASE_URL)))),
               ],
             ),
             const SizedBox(height: 16),
@@ -635,16 +611,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(
-                          child: OutlinedButton(onPressed: _showReferralsDialog, child: Text('Friends List (${_referredFriends.length})')),
-                        ),
+                        Expanded(child: OutlinedButton(onPressed: _showReferralsDialog, child: Text('Friends List (${_referredFriends.length})'))),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: _shareAppToFriends,
-                            icon: const Icon(Icons.share_rounded, size: 18),
-                            label: const Text('Refer App'),
-                          ),
+                          child: ElevatedButton.icon(onPressed: _shareAppToFriends, icon: const Icon(Icons.share_rounded, size: 18), label: const Text('Refer App')),
                         ),
                       ],
                     ),
