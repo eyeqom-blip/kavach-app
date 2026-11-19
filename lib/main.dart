@@ -316,7 +316,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _name = '';
   String _inviteCode = '';
   String _referralCode = '';
-  String _lang = 'HG'; // HG = Hinglish, HI = Hindi, EN = English
+  String _lang = 'HG';
   int _discountCredits = 0;
   int _maxMembers = 5;
   int _currentMembers = 1;
@@ -455,7 +455,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // PAID-ONLY FAMILY INVITE LOCK!
   void _shareWithFamily() {
     if (_planStatus != 'ACTIVE') {
       showDialog(
