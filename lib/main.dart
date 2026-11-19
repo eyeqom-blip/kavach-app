@@ -8,7 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 
 // 👇 YAHAN APNA EXACT RENDER URL DAALEIN (Bina last slash '/' ke)
-const String BASE_URL = 'https://YAHAN-APNA-RENDER-URL-LIKHEIN';
+const String BASE_URL = 'https://kavach-backend-8hjz.onrender.com';
 
 void main() {
   runApp(const FamilyKavachApp());
