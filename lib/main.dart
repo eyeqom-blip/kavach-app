@@ -107,7 +107,7 @@ class SetupWizardScreen extends StatefulWidget {
 class _SetupWizardScreenState extends State<SetupWizardScreen> {
   int _step = 0;
   final List<Map<String, dynamic>> _steps = [
-    {'title': 'Kavach Suraksha Me Swagat Hai!', 'desc': 'Ghar ke sabhi logo ko 24x7 safe rakhne ke liye bas 3 aasan permissions on karein.', 'icon': Icons.shield_rounded, 'perm': null},
+    {'title': 'Welcome', 'desc': '', 'icon': Icons.shield_rounded, 'perm': null},
     {'title': 'Step 1: Live GPS Location', 'desc': '1-click live location aur phone band hone se pehle last location bhejne ke liye.', 'icon': Icons.location_on_rounded, 'perm': Permission.location},
     {'title': 'Step 2: SOS Alerts & Notifications', 'desc': 'SOS alarm, low battery warning, aur naye updates dikhane ke liye.', 'icon': Icons.notifications_active_rounded, 'perm': Permission.notification},
     {'title': 'Step 3: Mic & Camera (SOS / Anti-Theft)', 'desc': 'Panic button par audio recording aur intruder photo capture ke liye.', 'icon': Icons.camera_alt_rounded, 'perm': Permission.camera},
@@ -139,25 +139,84 @@ class _SetupWizardScreenState extends State<SetupWizardScreen> {
           child: Column(
             children: [
               LinearProgressIndicator(value: (_step + 1) / _steps.length, borderRadius: BorderRadius.circular(10), minHeight: 8),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.all(28),
-                decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [cs.primary, cs.secondary])),
-                child: Icon(current['icon'], size: 72, color: Colors.black),
+              Expanded(
+                child: _step == 0
+                    ? SingleChildScrollView(
+                        child: Column(
+                          children: [
+                            const SizedBox(height: 28),
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+                                boxShadow: [BoxShadow(color: cs.primary.withOpacity(0.35), blurRadius: 24)],
+                              ),
+                              child: const Icon(Icons.shield_rounded, size: 64, color: Colors.black),
+                            ),
+                            const SizedBox(height: 24),
+                            const Text(
+                              'Parivar Ki Suraksha,\nSabse Badi Daulat 🛡️',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, height: 1.3),
+                            ),
+                            const SizedBox(height: 18),
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(20),
+                                color: cs.surface,
+                                border: Border.all(color: cs.primary.withOpacity(0.35)),
+                              ),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    '"Apne parivar ki safety aur security ke liye Family Kavach chunn-ne par aapka dil se dhanyawad!\n\n'
+                                    'Paisa aur waqt zindagi me wapas aa sakte hain, par apno ki muskaan aur suraksha sabse anmol hai. Aaiye milkar apne ghar ke har sadasya ke charo taraf ek pyar aur bharose ka Suraksha Kavach banayein."',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 15, height: 1.6),
+                                  ),
+                                  const SizedBox(height: 18),
+                                  Text(
+                                    '— Rayan',
+                                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.primary),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Creator, Family Kavach • kavach.sarahics.in',
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade400),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(28),
+                            decoration: BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [cs.primary, cs.secondary])),
+                            child: Icon(current['icon'], size: 72, color: Colors.black),
+                          ),
+                          const SizedBox(height: 32),
+                          Text(current['title'], textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 16),
+                          Text(current['desc'], textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey.shade400, height: 1.5)),
+                        ],
+                      ),
               ),
-              const SizedBox(height: 32),
-              Text(current['title'], textAlign: TextAlign.center, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
-              Text(current['desc'], textAlign: TextAlign.center, style: TextStyle(fontSize: 15, color: Colors.grey.shade400, height: 1.5)),
-              const Spacer(),
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: cs.primary, foregroundColor: Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                   onPressed: _handleNext,
-                  child: Text(_step == 0 ? 'Setup Shuru Karein →' : _step == _steps.length - 1 ? 'Allow & Finish ✓' : 'Allow Permission →',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(
+                    _step == 0 ? 'Shuru Karein (Setup) →' : _step == _steps.length - 1 ? 'Allow & Finish ✓' : 'Allow Permission →',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ),
             ],
