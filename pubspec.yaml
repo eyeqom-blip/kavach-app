@@ -1,7 +1,7 @@
 name: family_kavach
 description: Family Kavach - Complete Family Safety & Parental Control
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -14,6 +14,15 @@ dependencies:
   permission_handler: ^11.3.1
   share_plus: ^10.0.0
   device_info_plus: ^10.1.0
+  geolocator: ^13.0.1
+  battery_plus: ^6.0.2
+  url_launcher: ^6.3.0
+  image_picker: ^1.1.2
+  flutter_map: ^7.0.2
+  latlong2: ^0.9.1
+  audioplayers: ^6.1.0
+  record: ^5.1.2
+  path_provider: ^2.1.4
 
 dev_dependencies:
   flutter_test:
