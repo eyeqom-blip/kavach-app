@@ -13,7 +13,7 @@ import 'screens/chat_tasks_screen.dart';
 import 'screens/kids_antitheft_screen.dart';
 
 const String BASE_URL = 'https://kavach-backend-8hjz.onrender.com';
-const String SITE_URL = 'https://eyeqom-blip.github.io/kavach-releases/';
+const String SITE_URL = 'https://kavach.sarahics.in/';
 const String APP_VERSION = '1.0.3';
 
 void main() {
