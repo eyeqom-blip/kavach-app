@@ -246,19 +246,22 @@ class _ChatTasksScreenState extends State<ChatTasksScreen> with SingleTickerProv
                   },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.all(10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _msgCtrl,
-                        decoration: const InputDecoration(hintText: '🔒 E2EE Message likhein...', border: OutlineInputBorder()),
+              SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _msgCtrl,
+                          decoration: const InputDecoration(hintText: '🔒 E2EE Message likhein...', border: OutlineInputBorder()),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(onPressed: _sendMessage, icon: const Icon(Icons.send_rounded)),
-                  ],
+                      const SizedBox(width: 8),
+                      IconButton.filled(onPressed: _sendMessage, icon: const Icon(Icons.send_rounded)),
+                    ],
+                  ),
                 ),
               ),
             ],

@@ -13,7 +13,8 @@ import 'screens/chat_tasks_screen.dart';
 import 'screens/kids_antitheft_screen.dart';
 
 const String BASE_URL = 'https://kavach-backend-8hjz.onrender.com';
-const String APP_VERSION = '1.0.2';
+const String SITE_URL = 'https://eyeqom-blip.github.io/kavach-releases/';
+const String APP_VERSION = '1.0.3';
 
 void main() {
   runApp(const FamilyKavachApp());
@@ -315,10 +316,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _name = '';
   String _inviteCode = '';
   String _referralCode = '';
+  String _lang = 'HG'; // HG = Hinglish, HI = Hindi, EN = English
   int _discountCredits = 0;
   int _maxMembers = 5;
   int _currentMembers = 1;
-  String _planStatus = 'FREE_TRIAL';
+  String _planStatus = 'TRIAL';
   List<dynamic> _referredFriends = [];
   Map<String, dynamic> _config = {};
 
@@ -328,14 +330,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _initDashboard();
   }
 
+  String _t(String hg, String hi, String en) {
+    if (_lang == 'HI') return hi;
+    if (_lang == 'EN') return en;
+    return hg;
+  }
+
   Future<void> _initDashboard() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _name = prefs.getString('user_name') ?? 'Member';
       _inviteCode = prefs.getString('invite_code') ?? 'KVC----';
       _referralCode = prefs.getString('referral_code') ?? 'REF----';
+      _lang = prefs.getString('app_lang') ?? 'HG';
     });
     _fetchConfigAndStatus();
+  }
+
+  Future<void> _setLang(String lang) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('app_lang', lang);
+    setState(() => _lang = lang);
   }
 
   bool _isNewerVersion(String latest, String current) {
@@ -433,35 +448,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Row(children: [Icon(Icons.campaign_rounded, color: Colors.amber), SizedBox(width: 8), Text('Kavach Update')]),
         content: Text(announcement),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _shareAppToFriends();
-            },
-            child: const Text('Refer & Earn ₹1'),
-          ),
+          TextButton(onPressed: () { Navigator.pop(ctx); _shareAppToFriends(); }, child: const Text('Refer & Earn ₹1')),
           ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
         ],
       ),
     );
   }
 
+  // PAID-ONLY FAMILY INVITE LOCK!
   void _shareWithFamily() {
-    final link = _config['update_url'] ?? 'https://github.com/eyeqom-blip/kavach-releases/releases';
+    if (_planStatus != 'ACTIVE') {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(children: [Icon(Icons.lock_rounded, color: Colors.amber), SizedBox(width: 8), Text('Payment Required')]),
+          content: Text(
+            _t(
+              'Ghar ke members ko invite code bhejne se pehle please ₹20/month ya ₹80/6-months ka Kavach Plan pay karke approve karwayein!',
+              'परिवार के सदस्यों को जोड़ने से पहले कृपया ₹20/माह या ₹80/6-माह का कवच प्लान भुगतान करके सक्रिय करें!',
+              'Please pay and activate your Kavach Plan (₹20/mo or ₹80/6mo) before inviting family members.',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => PaymentScreen(baseUrl: BASE_URL, config: _config, discountCredits: _discountCredits)));
+                _fetchConfigAndStatus();
+              },
+              child: const Text('Pay Now 💳'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     Share.share(
       '🛡️ Ghar ke sabhi log *Family Kavach* install karein aur hamare family circle se judein!\n\n'
       '🔑 Mera Family Invite Code: *$_inviteCode*\n'
-      '📲 App Download: $link',
+      '📲 App Download Website: $SITE_URL',
     );
   }
 
   void _shareAppToFriends() {
-    final link = _config['update_url'] ?? 'https://github.com/eyeqom-blip/kavach-releases/releases';
     Share.share(
       '🛡️ Apne parivar ki 24x7 safety ke liye *Family Kavach* try karein!\n'
       'Live GPS, Silent-Breaking SOS, aur Kids Guard sirf ₹20/mo (5 Members) me.\n\n'
       '🎁 Signup karte waqt mera Referral Code daalein: *$_referralCode*\n'
-      '📲 Download Link:\n$link',
+      '📲 Download Website:\n$SITE_URL',
     );
   }
 
@@ -488,9 +526,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? null
                           : IconButton(
                               icon: const Icon(Icons.notifications_active_rounded, color: Colors.amber),
-                              onPressed: () => Share.share(
-                                'Namaste ${f['name']}! 🛡️ Apni family ki safety ke liye *Family Kavach* plan activate/renew kar lein (sirf ₹20/month)!',
-                              ),
+                              onPressed: () => Share.share('Namaste ${f['name']}! 🛡️ Apni family ki safety ke liye *Family Kavach* plan activate/renew kar lein (sirf ₹20/month)!'),
                             ),
                     );
                   },
@@ -507,18 +543,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isPaid = _planStatus == 'ACTIVE';
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
             Icon(Icons.shield_rounded, color: cs.primary),
             const SizedBox(width: 8),
-            const Text('Family Kavach', style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(_t('Family Kavach', 'परिवार कवच', 'Family Kavach'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             const SizedBox(width: 6),
-            Text('v$APP_VERSION', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
+            Text('v$APP_VERSION', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
           ],
         ),
         actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.translate_rounded),
+            onSelected: _setLang,
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'HG', child: Text('Hinglish')),
+              PopupMenuItem(value: 'HI', child: Text('हिंदी (Hindi)')),
+              PopupMenuItem(value: 'EN', child: Text('English')),
+            ],
+          ),
           IconButton(icon: Icon(widget.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded), onPressed: widget.onToggleTheme),
           IconButton(icon: const Icon(Icons.logout_rounded), onPressed: widget.onLogout),
         ],
@@ -538,15 +584,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Namaste, $_name 👋', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text('${_t("Namaste", "नमस्ते", "Hello")}, $_name 👋', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
-                  Text('Family Invite Code: $_inviteCode ($_currentMembers/$_maxMembers Members)',
-                      style: TextStyle(color: cs.primary, fontWeight: FontWeight.w600)),
+                  Text(
+                    isPaid ? 'Family Code: $_inviteCode ($_currentMembers/$_maxMembers Members)' : '🔒 Invite Locked — Please Activate Plan First',
+                    style: TextStyle(color: isPaid ? cs.primary : Colors.amber, fontWeight: FontWeight.w600),
+                  ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
                     onPressed: _shareWithFamily,
-                    icon: const Icon(Icons.family_restroom_rounded),
-                    label: const Text('Ghar Ke Members Ko Invite Karein'),
+                    icon: Icon(isPaid ? Icons.family_restroom_rounded : Icons.lock_rounded),
+                    label: Text(_t(
+                      isPaid ? 'Ghar Ke Members Ko Invite Karein' : 'Pay Karke Family Invite Unlock Karein',
+                      isPaid ? 'परिवार के सदस्यों को जोड़ें' : 'भुगतान करके इनवाइट अनलॉक करें',
+                      isPaid ? 'Invite Family Members' : 'Unlock Family Invite (Pay)',
+                    )),
                   ),
                 ],
               ),
@@ -557,15 +609,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 leading: CircleAvatar(backgroundColor: Colors.amber.withOpacity(0.2), child: const Icon(Icons.workspace_premium_rounded, color: Colors.amber)),
-                title: Text('Kavach Plan: $_planStatus ($_maxMembers Limit)', style: const TextStyle(fontWeight: FontWeight.bold)),
-                subtitle: Text('₹20/mo (5 Members) • Extra ₹5/mo • Pro ₹10/person\nReferral Credits: ₹$_discountCredits'),
+                title: Text('Plan: $_planStatus ($_maxMembers Limit)', style: const TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: Text('₹20/mo (5M) • Extra ₹5/M • Pro ₹10/M\nReferral Credits: ₹$_discountCredits'),
                 trailing: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
                   onPressed: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => PaymentScreen(baseUrl: BASE_URL, config: _config, discountCredits: _discountCredits)),
-                    );
+                    await Navigator.push(context, MaterialPageRoute(builder: (_) => PaymentScreen(baseUrl: BASE_URL, config: _config, discountCredits: _discountCredits)));
                     _fetchConfigAndStatus();
                   },
                   child: const Text('Pay / Add'),
@@ -581,13 +630,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisSpacing: 12,
               childAspectRatio: 1.2,
               children: [
-                _featureCard(Icons.my_location_rounded, 'Live GPS Track', '1-Click Map & Battery', Colors.cyan,
+                _featureCard(Icons.my_location_rounded, _t('Live GPS Track', 'लाइव जीपीएस मैप', 'Live GPS Map'), '1-Click Map & Battery', Colors.cyan,
                     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapSosScreen(baseUrl: BASE_URL)))),
-                _featureCard(Icons.sos_rounded, 'Emergency SOS', 'Silent Ring + Audio', Colors.redAccent,
+                _featureCard(Icons.sos_rounded, _t('Emergency SOS', 'आपातकालीन SOS', 'Emergency SOS'), 'Silent Ring + Audio', Colors.redAccent,
                     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapSosScreen(baseUrl: BASE_URL, openSosTab: true)))),
-                _featureCard(Icons.lock_rounded, 'E2EE Chat & Tasks', 'Encrypted + Chatbot', Colors.purpleAccent,
+                _featureCard(Icons.lock_rounded, _t('E2EE Chat & Tasks', 'सुरक्षित चैट व कार्य', 'Encrypted Chat'), 'Encrypted + Chatbot', Colors.purpleAccent,
                     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ChatTasksScreen(baseUrl: BASE_URL)))),
-                _featureCard(Icons.child_care_rounded, 'Kids & Anti-Theft', 'Person-Wise Guard', Colors.amber,
+                _featureCard(Icons.child_care_rounded, _t('Kids & Anti-Theft', 'बच्चों व फोन सुरक्षा', 'Kids & Anti-Theft'), 'Person-Wise Guard', Colors.amber,
                     () => Navigator.push(context, MaterialPageRoute(builder: (_) => const KidsAntiTheftScreen(baseUrl: BASE_URL)))),
               ],
             ),
@@ -611,11 +660,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        Expanded(child: OutlinedButton(onPressed: _showReferralsDialog, child: Text('Friends List (${_referredFriends.length})'))),
+                        Expanded(child: OutlinedButton(onPressed: _showReferralsDialog, child: Text('Friends (${_referredFriends.length})'))),
                         const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(onPressed: _shareAppToFriends, icon: const Icon(Icons.share_rounded, size: 18), label: const Text('Refer App')),
-                        ),
+                        Expanded(child: ElevatedButton.icon(onPressed: _shareAppToFriends, icon: const Icon(Icons.share_rounded, size: 18), label: const Text('Refer App'))),
                       ],
                     ),
                   ],
