@@ -5,12 +5,12 @@ import 'dart:typed_data';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:record/record.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MapSosScreen extends StatefulWidget {
@@ -23,9 +23,9 @@ class MapSosScreen extends StatefulWidget {
 }
 
 class _MapSosScreenState extends State<MapSosScreen> {
+  static const _audioChannel = MethodChannel('com.familykavach/sos_audio');
   final MapController _mapCtrl = MapController();
   final AudioPlayer _sirenPlayer = AudioPlayer();
-  final AudioRecorder _recorder = AudioRecorder();
   final Battery _battery = Battery();
 
   List<dynamic> _members = [];
@@ -38,7 +38,7 @@ class _MapSosScreenState extends State<MapSosScreen> {
   bool _syncing = false;
   double? _safeLat;
   double? _safeLng;
-  double _safeRadius = 500; // meters
+  final double _safeRadius = 500;
   Timer? _timer;
 
   @override
@@ -53,7 +53,9 @@ class _MapSosScreenState extends State<MapSosScreen> {
   void dispose() {
     _timer?.cancel();
     _sirenPlayer.dispose();
-    _recorder.dispose();
+    if (_recording) {
+      _audioChannel.invokeMethod('stopRecording').catchError((_) => null);
+    }
     super.dispose();
   }
 
@@ -98,7 +100,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
       _myLat = pos.latitude;
       _myLng = pos.longitude;
 
-      // Offline cache fallback + sync
       final queue = prefs.getStringList('offline_locs') ?? [];
       final currentPayload = jsonEncode({
         'userId': userId,
@@ -109,7 +110,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
       });
 
       try {
-        // Flush any queued offline locations first
         for (final q in queue) {
           await http.post(
             Uri.parse('${widget.baseUrl}/api/location/update'),
@@ -125,7 +125,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
           body: currentPayload,
         );
 
-        // Low battery (<10%) last location alert
         if (_batteryLevel <= 10 && !isCharging && !(prefs.getBool('low_bat_sent') ?? false)) {
           await http.post(
             Uri.parse('${widget.baseUrl}/api/sos/trigger'),
@@ -143,7 +142,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
           await prefs.setBool('low_bat_sent', false);
         }
 
-        // Geofence Check
         if (_safeLat != null && _safeLng != null) {
           final dist = Geolocator.distanceBetween(_safeLat!, _safeLng!, _myLat, _myLng);
           if (dist > _safeRadius && !(prefs.getBool('geo_alert_sent') ?? false)) {
@@ -164,7 +162,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
           }
         }
 
-        // Fetch all family members locations & alerts
         final memRes = await http.get(Uri.parse('${widget.baseUrl}/api/family/$familyId/locations'));
         if (memRes.statusCode == 200) {
           final d = jsonDecode(memRes.body);
@@ -176,7 +173,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
           if (d['success'] == true) _alerts = d['alerts'];
         }
       } catch (_) {
-        // Offline: save locally
         queue.add(currentPayload);
         await prefs.setStringList('offline_locs', queue);
       }
@@ -190,7 +186,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
     }
   }
 
-  // Pure Dart Offline Emergency Siren WAV Generator (Silent-Mode Bypass Alarm Stream)
   Uint8List _buildSirenWav() {
     const sampleRate = 16000;
     const durationSec = 1;
@@ -229,7 +224,9 @@ class _MapSosScreenState extends State<MapSosScreen> {
     if (_sirenActive) {
       await _sirenPlayer.stop();
       if (_recording) {
-        await _recorder.stop();
+        try {
+          await _audioChannel.invokeMethod('stopRecording');
+        } catch (_) {}
         _recording = false;
       }
       setState(() => _sirenActive = false);
@@ -238,7 +235,6 @@ class _MapSosScreenState extends State<MapSosScreen> {
 
     setState(() => _sirenActive = true);
 
-    // 1. Play Alarm Stream Siren (Silent mode tod kar bajega!)
     await _sirenPlayer.setAudioContext(AudioContext(
       android: const AudioContextAndroid(
         usageType: AndroidUsageType.alarm,
@@ -249,16 +245,13 @@ class _MapSosScreenState extends State<MapSosScreen> {
     await _sirenPlayer.setReleaseMode(ReleaseMode.loop);
     await _sirenPlayer.play(BytesSource(_buildSirenWav()));
 
-    // 2. Start SOS Audio Recording
     try {
-      if (await _recorder.hasPermission()) {
-        final dir = await getTemporaryDirectory();
-        await _recorder.start(const RecordConfig(), path: '${dir.path}/kavach_sos_${DateTime.now().millisecondsSinceEpoch}.m4a');
+      if (await Permission.microphone.request().isGranted) {
+        await _audioChannel.invokeMethod('startRecording');
         setState(() => _recording = true);
       }
     } catch (_) {}
 
-    // 3. Send Panic Alert to Server
     try {
       final prefs = await SharedPreferences.getInstance();
       await http.post(

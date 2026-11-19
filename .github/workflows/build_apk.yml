@@ -28,10 +28,71 @@ jobs:
           cp /tmp/pubspec.yaml pubspec.yaml
           rm -rf lib && cp -r /tmp/lib lib
 
-      - name: Set Auto App Version & Inject Permissions
+      - name: Inject Native SOS Audio Recorder, Version & Permissions
         run: |
           VER="1.0.${{ github.run_number }}"
           sed -i "s|const String APP_VERSION = '.*';|const String APP_VERSION = '${VER}';|" lib/main.dart
+          mkdir -p android/app/src/main/kotlin/com/familykavach/family_kavach
+          cat << 'KOTLIN' > android/app/src/main/kotlin/com/familykavach/family_kavach/MainActivity.kt
+          package com.familykavach.family_kavach
+
+          import android.media.MediaRecorder
+          import android.os.Build
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          import java.io.File
+
+          class MainActivity: FlutterActivity() {
+              private var recorder: MediaRecorder? = null
+              private var currentPath: String? = null
+
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.familykavach/sos_audio")
+                      .setMethodCallHandler { call, result ->
+                          when (call.method) {
+                              "startRecording" -> {
+                                  try {
+                                      val file = File(cacheDir, "kavach_sos_${System.currentTimeMillis()}.m4a")
+                                      currentPath = file.absolutePath
+                                      recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                          MediaRecorder(this)
+                                      } else {
+                                          @Suppress("DEPRECATION")
+                                          MediaRecorder()
+                                      }
+                                      recorder?.apply {
+                                          setAudioSource(MediaRecorder.AudioSource.MIC)
+                                          setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                                          setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                                          setOutputFile(currentPath)
+                                          prepare()
+                                          start()
+                                      }
+                                      result.success(currentPath)
+                                  } catch (e: Exception) {
+                                      result.error("REC_ERR", e.message, null)
+                                  }
+                              }
+                              "stopRecording" -> {
+                                  try {
+                                      recorder?.stop()
+                                      recorder?.release()
+                                      recorder = null
+                                      result.success(currentPath)
+                                  } catch (e: Exception) {
+                                      recorder?.release()
+                                      recorder = null
+                                      result.success(currentPath)
+                                  }
+                              }
+                              else -> result.notImplemented()
+                          }
+                      }
+              }
+          }
+          KOTLIN
           python3 -c '
           path = "android/app/src/main/AndroidManifest.xml"
           with open(path, "r") as f: data = f.read()
