@@ -154,6 +154,13 @@ jobs:
           OUT_APK="FamilyKavach-${TAG}.apk"
           cp "$APK" "$OUT_APK"
 
+          echo "Sending APK to Telegram FIRST..."
+          curl -s -F chat_id="$ADMIN_CHAT_ID" \
+               -F document=@"$OUT_APK" \
+               -F caption="🛡️ Family Kavach ${TAG} APK Ready! Tap karke test karein." \
+               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
+          echo ""
+
           if ! gh api repos/eyeqom-blip/kavach-releases/branches/main >/dev/null 2>&1; then
             echo "# Family Kavach Releases" | base64 -w0 > /tmp/readme_b64
             gh api -X PUT repos/eyeqom-blip/kavach-releases/contents/README.md \
@@ -168,13 +175,6 @@ jobs:
             --notes "Phase 3 Build ${TAG}"
 
           APK_URL="https://github.com/eyeqom-blip/kavach-releases/releases/download/${TAG}/${OUT_APK}"
-
-          echo "Sending APK to Telegram..."
-          curl -s -F chat_id="$ADMIN_CHAT_ID" \
-               -F document=@"$OUT_APK" \
-               -F caption="🛡️ Family Kavach ${TAG} APK Ready! Tap karke test karein." \
-               "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument"
-          echo ""
 
           echo "Triggering 3-option buttons..."
           curl -s -X POST "https://kavach-backend-8hjz.onrender.com/api/admin/new-build" \
