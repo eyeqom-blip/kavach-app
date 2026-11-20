@@ -727,6 +727,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              child: ListTile(
+                leading: const Icon(Icons.support_agent_rounded, color: Colors.cyanAccent, size: 30),
+                title: const Text('Helpdesk & Support', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('aivalue8@sarahics.in • kavach.sarahics.in'),
+                trailing: const Icon(Icons.mail_outline_rounded),
+                onTap: () => launchUrl(Uri.parse('mailto:aivalue8@sarahics.in?subject=Family%20Kavach%20Support'), mode: LaunchMode.externalApplication),
+              ),
+            ),
           ],
         ),
       ),
